@@ -150,7 +150,7 @@
       try {
         Papa.parse(CSV_URL, {
           download: true,
-          header: false, // Set to false to avoid duplicate column name issues
+          header: true,
           skipEmptyLines: true,
           complete: function(results) {
             processData(results.data);
@@ -165,28 +165,39 @@
       let totalClassRevenue = 0;
       const followUpLeads = [];
 
-      // Skip header row 0
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
+      rows.forEach(row => {
+        // Look up fields dynamically by flexible matching
+        const keys = Object.keys(row);
         
-        // Exact column positions from your sheet:
-        // Col 0: Business, Col 4: Student Name, Col 5: Outreach Status, Col 6: 1st Contact Date, Col 7: Last Follow-up Date, Col 10: $ Sold, Col 11: $ Paid
-        const business = row[0] ? row[0].trim() : 'Unknown';
-        const studentName = row[4] ? row[4].trim() : '';
-        const status = row[5] ? row[5].trim() : 'New Lead';
-        const lastContact = row[7] || row[6] || 'N/A';
+        // Find Student column (Column E)
+        const studentKey = keys.find(k => k.trim().toLowerCase() === 'student') || keys[4];
+        // Find Update column (Column F)
+        const statusKey = keys.find(k => k.trim().toLowerCase() === 'update') || keys[5];
+        // Find Business column
+        const businessKey = keys.find(k => k.trim().toLowerCase() === 'business') || keys[0];
+        // Find $ Sold column
+        const soldKey = keys.find(k => k.includes('$ Sold')) || keys[10];
+        // Find $ Paid column
+        const paidKey = keys.find(k => k.includes('$ Paid')) || keys[11];
+        // Find Date columns
+        const lastContactKey = keys.find(k => k.includes('Date Last Follow-Up')) || keys.find(k => k.includes('Date 1st Contact')) || keys[7];
 
-        // Filter out unassigned, empty, or non-student rows
-        if (!studentName || studentName === 'Not Assigned' || studentName === 'Unassigned' || studentName.toLowerCase() === 'student') continue;
+        const studentName = row[studentKey] ? row[studentKey].trim() : '';
+        const status = row[statusKey] ? row[statusKey].trim() : 'New Lead';
+        const business = row[businessKey] ? row[businessKey].trim() : 'Unknown Business';
+        const lastContact = row[lastContactKey] || 'N/A';
+
+        // Filter out unassigned or system rows
+        if (!studentName || studentName === 'Not Assigned' || studentName === 'Unassigned' || studentName.toLowerCase() === 'student') return;
 
         let soldVal = 0;
-        if (row[10]) {
-          soldVal = parseFloat(row[10].replace(/[^0-9.-]+/g, '')) || 0;
+        if (row[soldKey]) {
+          soldVal = parseFloat(String(row[soldKey]).replace(/[^0-9.-]+/g, '')) || 0;
         }
 
         let paidVal = 0;
-        if (row[11]) {
-          paidVal = parseFloat(row[11].replace(/[^0-9.-]+/g, '')) || 0;
+        if (row[paidKey]) {
+          paidVal = parseFloat(String(row[paidKey]).replace(/[^0-9.-]+/g, '')) || 0;
         }
 
         if (!students[studentName]) {
@@ -214,7 +225,7 @@
         if (status.toLowerCase().includes('pitched') || status.toLowerCase().includes('negotiat')) {
           followUpLeads.push({ business, student: studentName, status, lastContact });
         }
-      }
+      });
 
       const studentList = Object.values(students);
       renderClassProgress(totalClassRevenue);
