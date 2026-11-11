@@ -142,7 +142,6 @@
   </main>
 
   <script>
-    // Embedded Google Sheet Published CSV Link:
     const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSkbGq_s274tAsGZXlpwSku-wo7Wq7kyErNSJ-0BB3M4wnEYc55fhijtSR4vWkkDdCb4ITvreF2Cr9r/pub?gid=741917369&single=true&output=csv';
     const STUDENT_GOAL = 1000;
     const TOTAL_CLASS_GOAL = 7000;
@@ -151,7 +150,7 @@
       try {
         Papa.parse(CSV_URL, {
           download: true,
-          header: true,
+          header: false, // Set to false to avoid duplicate column name issues
           skipEmptyLines: true,
           complete: function(results) {
             processData(results.data);
@@ -166,29 +165,29 @@
       let totalClassRevenue = 0;
       const followUpLeads = [];
 
-      rows.forEach(row => {
-        const studentName = row['Student'] ? row['Student'].trim() : 'Unassigned';
+      // Skip header row 0
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
         
-        const statusKeys = Object.keys(row).filter(k => k.toLowerCase().includes('student') || k.toLowerCase().includes('status'));
-        let status = 'New Lead';
-        if (statusKeys.length > 1 && row[statusKeys[1]]) {
-          status = row[statusKeys[1]].trim();
-        }
+        // Exact column positions from your sheet:
+        // Col 0: Business, Col 4: Student Name, Col 5: Outreach Status, Col 6: 1st Contact Date, Col 7: Last Follow-up Date, Col 10: $ Sold, Col 11: $ Paid
+        const business = row[0] ? row[0].trim() : 'Unknown';
+        const studentName = row[4] ? row[4].trim() : '';
+        const status = row[5] ? row[5].trim() : 'New Lead';
+        const lastContact = row[7] || row[6] || 'N/A';
 
-        const business = row['Business'] || 'Unknown Business';
-        const lastContact = row['Date Last Follow-Up'] || row['Date 1st Contact'] || 'N/A';
-        
+        // Filter out unassigned, empty, or non-student rows
+        if (!studentName || studentName === 'Not Assigned' || studentName === 'Unassigned' || studentName.toLowerCase() === 'student') continue;
+
         let soldVal = 0;
-        if (row['$ Sold']) {
-          soldVal = parseFloat(row['$ Sold'].replace(/[^0-9.-]+/g, '')) || 0;
+        if (row[10]) {
+          soldVal = parseFloat(row[10].replace(/[^0-9.-]+/g, '')) || 0;
         }
 
         let paidVal = 0;
-        if (row['$ Paid']) {
-          paidVal = parseFloat(row['$ Paid'].replace(/[^0-9.-]+/g, '')) || 0;
+        if (row[11]) {
+          paidVal = parseFloat(row[11].replace(/[^0-9.-]+/g, '')) || 0;
         }
-
-        if (!studentName || studentName === 'Not Assigned' || studentName === 'Unassigned') return;
 
         if (!students[studentName]) {
           students[studentName] = { 
@@ -215,7 +214,7 @@
         if (status.toLowerCase().includes('pitched') || status.toLowerCase().includes('negotiat')) {
           followUpLeads.push({ business, student: studentName, status, lastContact });
         }
-      });
+      }
 
       const studentList = Object.values(students);
       renderClassProgress(totalClassRevenue);
