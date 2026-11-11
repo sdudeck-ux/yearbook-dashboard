@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yearbook Ad Sales Live Dashboard</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PapaParse for Google Sheets CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .live-pulse { animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6 font-sans">
+
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+    <div>
+      <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+        <i class="fa-solid fa-book-open text-amber-500"></i> 2027 Yearbook Ad Sales Dashboard
+      </h1>
+      <p class="text-slate-400 text-sm mt-1">Live Classroom Projector Tracker • Individual Goal: <span class="text-amber-400 font-bold">$500</span></p>
+    </div>
+    <div class="flex items-center gap-4 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
+      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+        <span class="w-3 h-3 bg-emerald-500 rounded-full live-pulse"></span> Live Auto-Sync
+      </div>
+      <span class="text-slate-600">|</span>
+      <span id="last-updated" class="text-xs text-slate-400">Syncing...</span>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto space-y-8">
+    <!-- 1. Total Class Progress -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-col md:flex-row justify-between items-baseline mb-3 gap-2">
+        <h2 class="text-lg font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-trophy text-amber-400"></i> Total Class Sales Progress
+        </h2>
+        <div class="text-2xl font-black tracking-tight">
+          <span id="class-total-sold" class="text-emerald-400">$0</span> 
+          <span class="text-slate-500 text-lg">/ <span id="class-total-goal">$0</span> Goal</span>
+          <span id="class-percent-badge" class="ml-3 text-sm px-3 py-1 bg-amber-500/20 text-amber-300 font-bold rounded-full border border-amber-500/30">0%</span>
+        </div>
+      </div>
+      <div class="w-full bg-slate-950 rounded-full h-7 border border-slate-800 overflow-hidden p-1">
+        <div id="class-progress-bar" class="bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-400 h-full rounded-full transition-all duration-1000 ease-out" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <!-- 2. Student Leaderboard Grid -->
+    <section>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-users text-indigo-400"></i> Student Goal Leaderboard
+        </h2>
+        <div class="flex gap-4 text-xs font-medium text-slate-400">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> $500+ (Goal Hit)</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> $250 - $499</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Under $250</span>
+        </div>
+      </div>
+      <div id="student-leaderboard" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <!-- Student Cards Generated Dynamically -->
+      </div>
+    </section>
+
+    <!-- 3. Outreach Metrics -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-emerald-400"></i> Top Outreach Leaders (Most Contacted)
+        </h3>
+        <div id="top-prospectors-list" class="space-y-3"></div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Needs Outreach Push (Untouched Leads)
+        </h3>
+        <div id="lagging-list" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- 4. Follow-Up Radar Table -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i> Follow-Up Radar (Pitched & Negotiating Leads)
+        </h3>
+        <span id="followup-count" class="text-xs bg-slate-800 text-slate-300 font-semibold px-2.5 py-1 rounded-full">0 Leads</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950 text-slate-400 uppercase text-xs font-semibold tracking-wider border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Business</th>
+              <th class="py-3 px-4">Assigned Student</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4">Last Contact Date</th>
+            </tr>
+          </thead>
+          <tbody id="followup-table-body" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Paste your Published CSV URL from Google Sheets here:
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSkbGq_s274tAsGZXlpwSku-wo7Wq7kyErNSJ-0BB3M4wnEYc55fhijtSR4vWkkDdCb4ITvreF2Cr9r/pub?gid=741917369&single=true&output=csv';
+    const STUDENT_GOAL = 500;
+
+    async function fetchAndRenderDashboard() {
+      try {
+        Papa.parse(CSV_URL, {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          complete: function(results) {
+            processData(results.data);
+            document.getElementById('last-updated').innerText = 'Last Synced: ' + new Date().toLocaleTimeString();
+          }
+        });
+      } catch (e) { console.error('Error fetching CSV:', e); }
+    }
+
+    function processData(rows) {
+      const students = {};
+      let totalClassRevenue = 0;
+      const followUpLeads = [];
+
+      rows.forEach(row => {
+        const studentName = row['Student'] ? row['Student'].trim() : 'Unassigned';
+        // Check both possible column names for status
+        const statusKeys = Object.keys(row).filter(k => k.toLowerCase().includes('student') || k.toLowerCase().includes('status'));
+        let status = 'New Lead';
+        if (statusKeys.length > 1 && row[statusKeys[1]]) {
+          status = row[statusKeys[1]].trim();
+        }
+
+        const business = row['Business'] || 'Unknown Business';
+        const lastContact = row['Date Last Follow-Up'] || row['Date 1st Contact'] || 'N/A';
+        
+        let soldVal = 0;
+        if (row['$ Sold']) {
+          soldVal = parseFloat(row['$ Sold'].replace(/[^0-9.-]+/g, '')) || 0;
+        }
+
+        if (!studentName || studentName === 'Not Assigned' || studentName === 'Unassigned') return;
+
+        if (!students[studentName]) {
+          students[studentName] = { name: studentName, sold: 0, totalLeads: 0, contactedCount: 0, newLeadCount: 0 };
+        }
+
+        students[studentName].sold += soldVal;
+        students[studentName].totalLeads += 1;
+        totalClassRevenue += soldVal;
+
+        if (status.toLowerCase() === 'new lead') {
+          students[studentName].newLeadCount += 1;
+        } else {
+          students[studentName].contactedCount += 1;
+        }
+
+        if (status.toLowerCase().includes('pitched') || status.toLowerCase().includes('negotiat')) {
+          followUpLeads.push({ business, student: studentName, status, lastContact });
+        }
+      });
+
+      const studentList = Object.values(students);
+      renderClassProgress(totalClassRevenue, studentList.length);
+      renderLeaderboard(studentList);
+      renderOutreachMetrics(studentList);
+      renderFollowUpRadar(followUpLeads);
+    }
+
+    function renderClassProgress(totalSold, studentCount) {
+      const classGoal = (studentCount || 1) * STUDENT_GOAL;
+      const percent = Math.min(Math.round((totalSold / classGoal) * 100), 100);
+      document.getElementById('class-total-sold').innerText = `$${totalSold.toLocaleString()}`;
+      document.getElementById('class-total-goal').innerText = `$${classGoal.toLocaleString()}`;
+      document.getElementById('class-percent-badge').innerText = `${percent}%`;
+      document.getElementById('class-progress-bar').style.width = `${percent}%`;
+    }
+
+    function renderLeaderboard(studentList) {
+      const container = document.getElementById('student-leaderboard');
+      container.innerHTML = '';
+      studentList.sort((a, b) => b.sold - a.sold);
+
+      studentList.forEach(student => {
+        const percent = Math.min(Math.round((student.sold / STUDENT_GOAL) * 100), 100);
+        let colorClass = student.sold >= 500 ? 'bg-emerald-500' : (student.sold >= 250 ? 'bg-amber-500' : 'bg-rose-500');
+        let badgeBg = student.sold >= 500 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : (student.sold >= 250 ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-rose-500/20 text-rose-300 border-rose-500/30');
+
+        container.innerHTML += `
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-lg">
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="font-bold text-lg text-white">${student.name}</span>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full border ${badgeBg}">${percent}%</span>
+              </div>
+              <div class="text-2xl font-black text-slate-100 mb-3">$${student.sold.toLocaleString()} <span class="text-xs font-normal text-slate-400">/ $500</span></div>
+            </div>
+            <div>
+              <div class="w-full bg-slate-950 rounded-full h-3 border border-slate-800 overflow-hidden mb-2">
+                <div class="${colorClass} h-full rounded-full transition-all duration-700" style="width: ${percent}%"></div>
+              </div>
+              <div class="text-xs text-slate-400 flex justify-between">
+                <span>Leads: ${student.totalLeads}</span>
+                <span>Contacted: ${student.contactedCount}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function renderOutreachMetrics(studentList) {
+      const topProspectors = [...studentList].sort((a, b) => b.contactedCount - a.contactedCount).slice(0, 4);
+      const topContainer = document.getElementById('top-prospectors-list');
+      topContainer.innerHTML = '';
+      topProspectors.forEach(s => {
+        topContainer.innerHTML += `
+          <div class="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <span class="font-semibold text-slate-200">${s.name}</span>
+            <span class="text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full">${s.contactedCount} Contacted</span>
+          </div>
+        `;
+      });
+
+      const lagging = [...studentList].sort((a, b) => b.newLeadCount - a.newLeadCount).slice(0, 4);
+      const laggingContainer = document.getElementById('lagging-list');
+      laggingContainer.innerHTML = '';
+      lagging.forEach(s => {
+        laggingContainer.innerHTML += `
+          <div class="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <span class="font-semibold text-slate-200">${s.name}</span>
+            <span class="text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 px-3 py-1 rounded-full">${s.newLeadCount} Untouched</span>
+          </div>
+        `;
+      });
+    }
+
+    function renderFollowUpRadar(leads) {
+      const body = document.getElementById('followup-table-body');
+      document.getElementById('followup-count').innerText = `${leads.length} Leads`;
+      body.innerHTML = '';
+      if (leads.length === 0) {
+        body.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-slate-500">No active follow-ups required right now!</td></tr>`;
+        return;
+      }
+      leads.forEach(lead => {
+        const statusBg = lead.status.toLowerCase().includes('negotiat') ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+        body.innerHTML += `
+          <tr class="hover:bg-slate-950/50">
+            <td class="py-3 px-4 font-semibold text-white">${lead.business}</td>
+            <td class="py-3 px-4">${lead.student}</td>
+            <td class="py-3 px-4"><span class="text-xs px-2.5 py-1 rounded-full border ${statusBg}">${lead.status}</span></td>
+            <td class="py-3 px-4 text-slate-400">${lead.lastContact}</td>
+          </tr>
+        `;
+      });
+    }
+
+    fetchAndRenderDashboard();
+    setInterval(fetchAndRenderDashboard, 30000);
+  </script>
+</body>
+</html>
